@@ -1,7 +1,12 @@
+from typing import Any
+
+import requests
+import io
 import vk_api
+import configparser
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboardColor, VkKeyboard
-import os
+from cls_vk_api import VkApi
 
 
 class VKBot:
@@ -12,13 +17,17 @@ class VKBot:
         self.vk_session = vk_api.VkApi(token=self.TOKEN)
         self.vk = self.vk_session.get_api()
         self.longpoll = VkLongPoll(self.vk_session)
+        self.config = configparser.ConfigParser()
+        self.config.read("token.ini")
+        self.api = VkApi(self.config['TOKEN']['vk_token'])
 
-    def send_message(self, user_id, message=None, keyboard=None):
+    def send_message(self, user_id, message=None, keyboard=None, attachment=None):
         self.vk.messages.send(
             user_id=user_id,
             random_id=0,
             keyboard=keyboard,
-            message=message
+            message=message,
+            attachment=attachment
         )
 
     def interface(self):
@@ -82,6 +91,28 @@ class VKBot:
         city, user_id = self.interface()
         self.filter_age(user_id, city)
 
+    def search(self, city: str, age: int, sex: str,
+               count: int, user_id: Any, age_range=5) -> None:
+        age_from, age_to = age - age_range, age + age_range
+        sex_id = 0
+        if sex == "Женщина":
+            sex_id = 1
+        elif sex == "Мужчина":
+            sex_id = 2
+        data = self.api.get_users_data(city, sex_id, age_from, age_to, count)
+        for user in data:
+            msg = f"{user.get("first_last_name")} {user.get("link")}"
+            self.send_message(message=msg, user_id=user_id)
+            for photo_link in user.get("photos_links"):
+                content = requests.get(photo_link).content
+                photo_bytes = io.BytesIO(content)
+                upload = vk_api.VkUpload(self.vk)
+                photo = upload.photo_messages(photos=[photo_bytes])[0]
+                owner_id = photo['owner_id']
+                photo_id = photo['id']
+                self.send_message(user_id=user_id,
+                                  attachment=f'photo{owner_id}_{photo_id}')
+
     # Основной цикл бота
     def run(self):
         # Ожидаем ответ пользователя
@@ -92,8 +123,7 @@ class VKBot:
             self.filter_city(user_id)
 
         elif text == 'поиск':
-            pass
-
+            self.search("Москва", 25, "Женщина", 3, user_id)
         elif text == 'Посмотреть настроенные фильтры':
             pass
 
@@ -103,5 +133,5 @@ class VKBot:
 
 if __name__ == '__main__':
     bot = VKBot()
-    bot.run()
     print('Бот запущен')
+    bot.run()

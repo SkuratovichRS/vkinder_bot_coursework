@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import requests
 import configparser
 import random
@@ -12,6 +14,19 @@ class VkApi:
         self.token = token
         self.base_url = 'https://api.vk.com/method/'
         self.base_params = {'access_token': token, 'v': '5.131'}
+
+    def get_random_users(self, data: list, count: int) -> list[Any]:
+        chosen_users = []
+        result = []
+        attempts = count * 10
+        attempt = 1
+        while len(result) < count and attempt <= attempts:
+            user = random.choice(data)
+            if user not in chosen_users and self.has_three_photo(user.get("id")):
+                result.append(user)
+                chosen_users.append(user)
+            attempt += 1
+        return result
 
     def has_three_photo(self, user_id: int) -> bool:
 
@@ -34,19 +49,21 @@ class VkApi:
         return len(response_json.get("response").get("items")) >= 3
 
     def find_users(self, city: str, sex: int, age_from: int,
-                   age_to: int, count: int = 10) -> (
+                   age_to: int, count: int = 5) -> (
             list)[dict[str, str | list[Any] | Any]]:
 
         url = f"{self.base_url}users.search"
         self.base_params.update(
             {
-                "count": count,
+                "count": 1000,
                 "hometown": city,
                 "sex": sex,
                 "age_from": age_from,
                 "age_to": age_to,
                 "has_photo": 1,
+                "is_closed": 0,
                 # "offset": random.randint(0, 1000 - count)
+                # "offset": 100
             }
         )
         response = requests.get(url=url, params=self.base_params)
@@ -54,20 +71,21 @@ class VkApi:
         response_json = response.json()
         if list(response_json.keys())[0] == 'error':
             raise Exception([response_json['error']['error_msg']])
-
         try:
-            data = [
-                {
-                    "id": user.get("id"),
-                    "link": f"https://vk.com/id{user.get("id")}",
-                    "first_last_name": f"{user.get("first_name")} "
-                                       f"{user.get("last_name")}"
-                }
-                for user in response_json.get("response").get("items")
-                if self.has_three_photo(user.get("id"))]
+            response_json.get("response").get("items")
         except Exception as e:
-            data = []
             print(f"{e}")
+            return []
+        random_users = (self.get_random_users
+                        (response_json.get("response").get("items"), count))
+        data = [
+            {
+                "id": user.get("id"),
+                "link": f"https://vk.com/id{user.get("id")}",
+                "first_last_name": f"{user.get("first_name")} "
+                                   f"{user.get("last_name")}"
+            }
+            for user in random_users]
 
         return data
 
@@ -95,11 +113,13 @@ class VkApi:
 
     def get_users_data(self, city: str, sex: int, age_from: int,
                        age_to: int, count: int = 5) -> (
-            list)[dict[str, str | list[Any] | None | Any]]:
+            list[dict[str, str | list[Any] | None | Any]] | str):
 
         raw_data = self.find_users(city, sex, age_from, age_to, count)
+        if not raw_data:
+            return "По заданным параметрам никого не найдено"
         valid_data = []
-        for user in raw_data[:count + 1]:
+        for user in raw_data:
             user_id = user.get("id")
             photos_links = self.get_photos_links(user_id)
             valid_data.append(
@@ -113,5 +133,7 @@ class VkApi:
         return valid_data
 
 
-api = VkApi(config['TOKEN']['vk_token'])
-print(api.get_users_data("Москва", 1, 20, 30))
+if __name__ == '__main__':
+    api = VkApi(config['TOKEN']['vk_token'])
+    pprint(api.get_users_data("Москва", 1, 20, 30))
+    # pprint(api.find_users("Москва", 1, 20, 30, 20))
