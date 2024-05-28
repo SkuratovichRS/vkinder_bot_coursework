@@ -6,9 +6,6 @@ import random
 from typing import Any
 from collections import deque
 
-config = configparser.ConfigParser()
-config.read("token.ini")
-
 
 class VkApi:
     def __init__(self, token):
@@ -20,7 +17,7 @@ class VkApi:
     def get_random_pairs(self, data: list, count: int) -> list[Any]:
         chosen_users = []
         result = []
-        attempts = count * 10
+        attempts = count * 2
         attempt = 1
         while len(result) < count and attempt <= attempts:
             user = random.choice(data)
@@ -134,47 +131,11 @@ class VkApi:
     def get_pair_from_storage(self):
         return self.users_storage.popleft()
 
-    def f(self, city, sex, age_from, age_to, count):
-        url = f"{self.base_url}users.search"
-        self.base_params.update(
-            {
-                "count": 1000,
-                "hometown": city,
-                "sex": sex,
-                "age_from": age_from,
-                "age_to": age_to,
-                "has_photo": 1,
-                "is_closed": 0,
-                # "offset": random.randint(0, 1000 - count)
-                # "offset": 100
-            }
-        )
-        response = requests.get(url=url, params=self.base_params)
-        print(f"{self.find_pairs.__name__}-{response.status_code=}")
-        response_json = response.json()
-        if list(response_json.keys())[0] == 'error':
-            raise Exception([response_json['error']['error_msg']])
-        try:
-            response_json.get("response").get("items")
-        except Exception as e:
-            print(f"{e}")
-            return []
-        random_users = response_json.get("response").get("items")
-        data = [
-            {
-                "id": user.get("id"),
-                "link": f"https://vk.com/id{user.get("id")}",
-                "first_last_name": f"{user.get("first_name")} "
-                                   f"{user.get("last_name")}"
-            }
-            for user in random_users]
-        return data
-
 
 if __name__ == '__main__':
-    api = VkApi(config['TOKEN']['vk_token'])
-    # api.store_pairs_data("Москва", 1, 20, 30)
-    # pprint(api.users_storage)
-    # print(api.get_pair_from_storage())
-    # pprint(api.users_storage)
-    pprint(api.f("Москва", 1, 20, 30, 5))
+    config = configparser.ConfigParser()
+    config.read("settings.ini")
+    api = VkApi(config['API']['TOKEN'])
+    api.store_pairs_data("Москва", 1, 20, 30)
+    pprint(api.users_storage)
+

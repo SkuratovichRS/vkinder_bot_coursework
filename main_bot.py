@@ -3,109 +3,129 @@ from typing import Any
 import requests
 import io
 import vk_api
-import configparser
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboardColor, VkKeyboard
-from api_vk import VkApi
+from cls_vk_api import VkApi
+from Database import Database
+import configparser
 
 
 class VKBot:
-    TOKEN = 'vk1.a.1Ju1eKhG7yqQZ8RgAqfuAjUEEA8zO-DTcHM8FZkqhpyzkEPlqyhlwJNZyRam-eZl_EVNGd68qBNXcEbXQwvC2_gz6ZxW4VDgpAnXefMQ6532OPs4xwIifVnmCDUZaK4wZGeZ2n2 8rxEFiCWSM4CQy153hnKbzPdnQRI_217US9vFpxv2iY1ab-PNpj9dJmddxQro69uldNYgOk8xddLWXw'
+    config = configparser.ConfigParser()
+    config.read("settings.ini")
 
     def __init__(self):
-        # Авторизация в VK
-        self.vk_session = vk_api.VkApi(token=self.TOKEN)
+        self.vk_session = vk_api.VkApi(token=self.config['BOT']['TOKEN'])
         self.vk = self.vk_session.get_api()
         self.longpoll = VkLongPoll(self.vk_session)
-        self.config = configparser.ConfigParser()
-        self.config.read("token.ini")
-        self.api = VkApi(self.config['TOKEN']['vk_token'])
+        self.api = VkApi(self.config['API']['TOKEN'])
+        self.db = Database(self.config['DATABASE']['NAME'],
+                           self.config['DATABASE']['USER'],
+                           self.config['DATABASE']['PASSWORD'],
+                           self.config['DATABASE']['HOST'],
+                           int(self.config['DATABASE']['PORT']))
+        self.current_pair = None
 
-    def send_message(self, user_id, message=None, keyboard=None, attachment=None):
+    def send_message(self, user_id, message=None, keyboard=None, attachment=None, template=None):
         self.vk.messages.send(
             user_id=user_id,
             random_id=0,
             keyboard=keyboard,
             message=message,
-            attachment=attachment
+            attachment=attachment,
+            template=template
         )
 
     def interface(self):
-        # Ожидаем ответ пользователя
         for event in self.longpoll.listen():
             if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                 text = event.text.lower()
                 user_id = event.user_id
                 return text, user_id
 
-    # Функция для создания клавиатуры бота
-    def start_create_keyboard(self):
-        keyboard = VkKeyboard()
+    @staticmethod
+    def start_create_keyboard():
+        keyboard = VkKeyboard(one_time=True)
+        keyboard.add_button('Избранные', color=VkKeyboardColor.PRIMARY)
         keyboard.add_button('Настроить фильтры поиска', color=VkKeyboardColor.PRIMARY)
-        keyboard.add_line()  # Добавление новой строки
+        keyboard.add_line()
         keyboard.add_button('Поиск', color=VkKeyboardColor.POSITIVE)
         return keyboard.get_keyboard()
 
-    # Функция для создания клавиатуры с кнопками "Парень" и "Девушка"
-    def create_keyboard_gender(self):
+    @staticmethod
+    def create_keyboard_gender():
         keyboard = VkKeyboard()
         keyboard.add_button('Парень', color=VkKeyboardColor.PRIMARY)
         keyboard.add_line()
         keyboard.add_button('Девушка', color=VkKeyboardColor.POSITIVE)
         return keyboard.get_keyboard()
 
-    def handle_gender_selection(self, event):
-        # Получаем текст нажатой кнопки
-        selected_gender = event.object.text
+    @staticmethod
+    def create_search_keyboard():
+        keyboard = VkKeyboard(one_time=True)
+        keyboard.add_button('Дальше', color=VkKeyboardColor.PRIMARY)
+        keyboard.add_button('Поиск', color=VkKeyboardColor.PRIMARY)
+        keyboard.add_line()
+        keyboard.add_button('Посмотреть избранное',
+                            color=VkKeyboardColor.POSITIVE)
+        return keyboard.get_keyboard()
 
-        # Обрабатываем выбор пользователя
-        if selected_gender == 'Парень':
-            # Действия при выборе "Парень"
-            print("Пользователь выбрал 'Парень'")
-        elif selected_gender == 'Девушка':
-            # Действия при выборе "Девушка"
-            print("Пользователь выбрал 'Девушка'")
+    @staticmethod
+    def create_add_favorites_inline_keyboard():
+        keyboard = VkKeyboard(inline=True)
+        keyboard.add_button("Добавить в избранное", color=VkKeyboardColor.POSITIVE)
+        return keyboard.get_keyboard()
+
+    def handle_gender_selection(self, selected_gender, user_id, city, age):
+        keyboard = self.start_create_keyboard()
+
+        result_user_id = self.db.fetch_one('SELECT user_id FROM users WHERE user_id = %s', (user_id,))
+
+        if result_user_id:
+            self.db.execute_query(
+                f"UPDATE users SET city = '{city}', sex = '{selected_gender}', age = {age} WHERE user_id = {user_id}")
         else:
-            # Обработка неожиданного результата
-            print("Неизвестный выбор:", selected_gender)
+            self.db.execute_query('INSERT INTO users (user_id, city, sex, age) VALUES (%s, %s, %s, %s)',
+                                  (user_id, city, selected_gender, age))
+
+        self.send_message(user_id, 'Теперь фильтры настроены, далее нажмите кнопку поиск', keyboard)
 
     def buttons_filter_male_or_female(self, user_id, city, age):
-        # print(city)
-        # print(age)
-        event, user_id = self.interface()
         keyboard = self.create_keyboard_gender()
         self.send_message(user_id, 'Выберите желаемый пол:', keyboard)
-        self.handle_gender_selection(event)
+        selected_gender, user_id = self.interface()
+        self.handle_gender_selection(selected_gender, user_id, city, age)
 
     def filter_age(self, user_id, city):
-        # print(user_id)
-        # print(city)
         self.send_message(user_id, 'Напишите желаемый возраст:')
-        # Ожидаем ответ пользователя
         age, user_id = self.interface()
         self.buttons_filter_male_or_female(user_id, city, age)
 
     def filter_city(self, user_id):
         self.send_message(user_id, 'Напишите название города:')
-        # Ожидаем ответ пользователя
         city, user_id = self.interface()
         self.filter_age(user_id, city)
 
     def search(self, city: str, age: int, sex: str,
-               count: int, user_id: Any, age_range=5) -> None:
-        age_from, age_to = age - age_range, age + age_range
+               user_id: Any, count: int = 3) -> None:
+        age_from = age
+        age_to = age
         sex_id = 0
-        if sex == "Женщина":
+        if sex.lower() == "девушка":
             sex_id = 1
-        elif sex == "Мужчина":
+        elif sex.lower() == "парень":
             sex_id = 2
-        self.api.store_pairs_data(city, sex_id, age_from, age_to, count)
+        self.api.store_pairs_data(city.capitalize(), sex_id, age_from, age_to, count)
         self.show_pair(user_id)
 
     def show_pair(self, user_id):
         user = self.api.get_pair_from_storage()
+        self.current_pair = user
         msg = f"{user.get("first_last_name")} {user.get("link")}"
-        self.send_message(message=msg, user_id=user_id)
+        self.send_message(message=msg, user_id=user_id,
+                          keyboard=self.create_search_keyboard())
+        self.send_message(message='⬇️', user_id=user_id,
+                          keyboard=self.create_add_favorites_inline_keyboard())
         for photo_link in user.get("photos_links"):
             content = requests.get(photo_link).content
             photo_bytes = io.BytesIO(content)
@@ -116,32 +136,61 @@ class VKBot:
             self.send_message(user_id=user_id,
                               attachment=f'photo{owner_id}_{photo_id}')
 
-    # Основной цикл бота
     def run(self):
-        # Ожидаем ответ пользователя
         text, user_id = self.interface()
-        self.start_create_keyboard()
 
         if text == 'настроить фильтры поиска':
             self.filter_city(user_id)
 
         elif text == 'поиск':
-            self.search("Москва", 25, "Женщина", 3, user_id)
+            # на этом участке предположительно нужно нужно сделать так, чтобы убраит лишнее (лучше через try/except)
+            # query = db.fetch_all('SELECT city, sex, age, user_id FROM users WHERE user_id= %s', (user_id,))
+            # if query:
+            #       for city, sex, age, user_id in query:
+            #           self.search(str(city), int(age), str(sex), 3, user_id)
+            #   else:
+            #           self.send_message(user_id, 'Вы еще не настроили фильтры для поиска')
+
+            result_user_id = self.db.fetch_one(
+                'SELECT user_id FROM users WHERE user_id = %s',
+                (user_id,))
+
+            if result_user_id:
+                query = self.db.fetch_all(
+                    'SELECT city, sex, age, user_id FROM users WHERE user_id= %s',
+                    (user_id,))
+                city, sex, age, user_id = query[0]
+                self.search(str(city), int(age), str(sex), user_id)
+            else:
+                self.send_message(user_id, 'Вы еще не настроили фильтры для поиска')
+
         elif text == 'дальше':
             if self.api.users_storage:
                 self.show_pair(user_id)
             else:
                 msg = 'Вы посмотрели все пары, нажмите поиск для генерации новых'
-                self.send_message(user_id, msg)
+                self.send_message(user_id, msg, keyboard=self.create_search_keyboard())
 
-        elif text == 'Посмотреть настроенные фильтры':
-            pass
+        elif text == 'старт':
+            self.send_message(user_id, 'Добро пожаловать! Я помогу найти для тебя девушку/парня, '
+                                       'для начала настрой фильтры поиска', self.start_create_keyboard())
 
-        elif text == 'Сбросить фильтры':
-            pass
+        elif text == 'добавить в избранное':
+            first_last_name = self.current_pair.get("first_last_name")
+            vk_link = self.current_pair.get("link")
+            self.db.add_into_favorites(user_id, first_last_name, vk_link)
+            pair_id = self.db.fetch_one('SELECT id FROM pairs '
+                                        'WHERE first_last_name=%s',
+                                        (first_last_name,))[0]
+            for photo_link in self.current_pair.get("photos_links"):
+                self.db.add_into_photos(pair_id, photo_link)
+            self.send_message(message="Пара успешно добавлена",
+                              user_id=user_id,
+                              keyboard=self.create_search_keyboard())
 
 
 if __name__ == '__main__':
     bot = VKBot()
     print('Бот запущен')
-    bot.run()
+    while True:
+        bot.run()
