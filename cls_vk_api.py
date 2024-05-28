@@ -3,7 +3,8 @@ from pprint import pprint
 import requests
 import configparser
 import random
-from typing import Any, List, Dict
+from typing import Any
+from collections import deque
 
 config = configparser.ConfigParser()
 config.read("token.ini")
@@ -14,8 +15,9 @@ class VkApi:
         self.token = token
         self.base_url = 'https://api.vk.com/method/'
         self.base_params = {'access_token': token, 'v': '5.131'}
+        self.users_storage = deque()
 
-    def get_random_users(self, data: list, count: int) -> list[Any]:
+    def get_random_pairs(self, data: list, count: int) -> list[Any]:
         chosen_users = []
         result = []
         attempts = count * 10
@@ -48,7 +50,7 @@ class VkApi:
 
         return len(response_json.get("response").get("items")) >= 3
 
-    def find_users(self, city: str, sex: int, age_from: int,
+    def find_pairs(self, city: str, sex: int, age_from: int,
                    age_to: int, count: int = 5) -> (
             list)[dict[str, str | list[Any] | Any]]:
 
@@ -67,7 +69,7 @@ class VkApi:
             }
         )
         response = requests.get(url=url, params=self.base_params)
-        print(f"{self.find_users.__name__}-{response.status_code=}")
+        print(f"{self.find_pairs.__name__}-{response.status_code=}")
         response_json = response.json()
         if list(response_json.keys())[0] == 'error':
             raise Exception([response_json['error']['error_msg']])
@@ -76,7 +78,7 @@ class VkApi:
         except Exception as e:
             print(f"{e}")
             return []
-        random_users = (self.get_random_users
+        random_users = (self.get_random_pairs
                         (response_json.get("response").get("items"), count))
         data = [
             {
@@ -111,18 +113,17 @@ class VkApi:
 
         return links
 
-    def get_users_data(self, city: str, sex: int, age_from: int,
-                       age_to: int, count: int = 5) -> (
+    def store_pairs_data(self, city: str, sex: int, age_from: int,
+                         age_to: int, count: int = 5) -> (
             list[dict[str, str | list[Any] | None | Any]] | str):
 
-        raw_data = self.find_users(city, sex, age_from, age_to, count)
+        raw_data = self.find_pairs(city, sex, age_from, age_to, count)
         if not raw_data:
             return "По заданным параметрам никого не найдено"
-        valid_data = []
         for user in raw_data:
             user_id = user.get("id")
             photos_links = self.get_photos_links(user_id)
-            valid_data.append(
+            self.users_storage.append(
                 {
                     "first_last_name": user.get("first_last_name"),
                     "link": user.get("link"),
@@ -130,10 +131,50 @@ class VkApi:
                 }
             )
 
-        return valid_data
+    def get_pair_from_storage(self):
+        return self.users_storage.popleft()
+
+    def f(self, city, sex, age_from, age_to, count):
+        url = f"{self.base_url}users.search"
+        self.base_params.update(
+            {
+                "count": 1000,
+                "hometown": city,
+                "sex": sex,
+                "age_from": age_from,
+                "age_to": age_to,
+                "has_photo": 1,
+                "is_closed": 0,
+                # "offset": random.randint(0, 1000 - count)
+                # "offset": 100
+            }
+        )
+        response = requests.get(url=url, params=self.base_params)
+        print(f"{self.find_pairs.__name__}-{response.status_code=}")
+        response_json = response.json()
+        if list(response_json.keys())[0] == 'error':
+            raise Exception([response_json['error']['error_msg']])
+        try:
+            response_json.get("response").get("items")
+        except Exception as e:
+            print(f"{e}")
+            return []
+        random_users = response_json.get("response").get("items")
+        data = [
+            {
+                "id": user.get("id"),
+                "link": f"https://vk.com/id{user.get("id")}",
+                "first_last_name": f"{user.get("first_name")} "
+                                   f"{user.get("last_name")}"
+            }
+            for user in random_users]
+        return data
 
 
 if __name__ == '__main__':
     api = VkApi(config['TOKEN']['vk_token'])
-    pprint(api.get_users_data("Москва", 1, 20, 30))
-    # pprint(api.find_users("Москва", 1, 20, 30, 20))
+    # api.store_pairs_data("Москва", 1, 20, 30)
+    # pprint(api.users_storage)
+    # print(api.get_pair_from_storage())
+    # pprint(api.users_storage)
+    pprint(api.f("Москва", 1, 20, 30, 5))

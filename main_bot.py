@@ -99,19 +99,22 @@ class VKBot:
             sex_id = 1
         elif sex == "Мужчина":
             sex_id = 2
-        data = self.api.get_users_data(city, sex_id, age_from, age_to, count)
-        for user in data:
-            msg = f"{user.get("first_last_name")} {user.get("link")}"
-            self.send_message(message=msg, user_id=user_id)
-            for photo_link in user.get("photos_links"):
-                content = requests.get(photo_link).content
-                photo_bytes = io.BytesIO(content)
-                upload = vk_api.VkUpload(self.vk)
-                photo = upload.photo_messages(photos=[photo_bytes])[0]
-                owner_id = photo['owner_id']
-                photo_id = photo['id']
-                self.send_message(user_id=user_id,
-                                  attachment=f'photo{owner_id}_{photo_id}')
+        self.api.store_pairs_data(city, sex_id, age_from, age_to, count)
+        self.show_pair(user_id)
+
+    def show_pair(self, user_id):
+        user = self.api.get_pair_from_storage()
+        msg = f"{user.get("first_last_name")} {user.get("link")}"
+        self.send_message(message=msg, user_id=user_id)
+        for photo_link in user.get("photos_links"):
+            content = requests.get(photo_link).content
+            photo_bytes = io.BytesIO(content)
+            upload = vk_api.VkUpload(self.vk)
+            photo = upload.photo_messages(photos=[photo_bytes])[0]
+            owner_id = photo['owner_id']
+            photo_id = photo['id']
+            self.send_message(user_id=user_id,
+                              attachment=f'photo{owner_id}_{photo_id}')
 
     # Основной цикл бота
     def run(self):
@@ -124,6 +127,13 @@ class VKBot:
 
         elif text == 'поиск':
             self.search("Москва", 25, "Женщина", 3, user_id)
+        elif text == 'дальше':
+            if self.api.users_storage:
+                self.show_pair(user_id)
+            else:
+                msg = 'Вы посмотрели все пары, нажмите поиск для генерации новых'
+                self.send_message(user_id, msg)
+
         elif text == 'Посмотреть настроенные фильтры':
             pass
 
