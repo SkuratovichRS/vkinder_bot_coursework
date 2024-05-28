@@ -6,7 +6,7 @@ import vk_api
 import configparser
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboardColor, VkKeyboard
-from cls_vk_api import VkApi
+from api_vk import VkApi
 
 
 class VKBot:
