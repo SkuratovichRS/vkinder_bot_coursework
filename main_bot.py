@@ -1,13 +1,12 @@
-from typing import Any
-
+import configparser
 import requests
 import io
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboardColor, VkKeyboard
 from cls_vk_api import VkApi
-from Database import Database
-import configparser
+from database import Database
+from typing import Any
 
 
 class VKBot:
@@ -66,15 +65,17 @@ class VKBot:
         keyboard.add_button('Дальше', color=VkKeyboardColor.PRIMARY)
         keyboard.add_button('Поиск', color=VkKeyboardColor.PRIMARY)
         keyboard.add_line()
-        keyboard.add_button('Посмотреть избранное',
+        keyboard.add_button('Добавить в избранные',
+                            color=VkKeyboardColor.POSITIVE)
+        keyboard.add_button('Избранные',
                             color=VkKeyboardColor.POSITIVE)
         return keyboard.get_keyboard()
 
-    @staticmethod
-    def create_add_favorites_inline_keyboard():
-        keyboard = VkKeyboard(inline=True)
-        keyboard.add_button("Добавить в избранное", color=VkKeyboardColor.POSITIVE)
-        return keyboard.get_keyboard()
+    # @staticmethod
+    # def create_add_favorites_inline_keyboard():
+    #     keyboard = VkKeyboard(inline=True)
+    #     keyboard.add_button("Добавить в избранное", color=VkKeyboardColor.POSITIVE)
+    #     return keyboard.get_keyboard()
 
     def handle_gender_selection(self, selected_gender, user_id, city, age):
         keyboard = self.start_create_keyboard()
@@ -118,14 +119,12 @@ class VKBot:
         self.api.store_pairs_data(city.capitalize(), sex_id, age_from, age_to, count)
         self.show_pair(user_id)
 
-    def show_pair(self, user_id):
+    def show_pair(self, user_id: int) -> None:
         user = self.api.get_pair_from_storage()
         self.current_pair = user
         msg = f"{user.get("first_last_name")} {user.get("link")}"
         self.send_message(message=msg, user_id=user_id,
                           keyboard=self.create_search_keyboard())
-        self.send_message(message='⬇️', user_id=user_id,
-                          keyboard=self.create_add_favorites_inline_keyboard())
         for photo_link in user.get("photos_links"):
             content = requests.get(photo_link).content
             photo_bytes = io.BytesIO(content)
@@ -175,18 +174,30 @@ class VKBot:
             self.send_message(user_id, 'Добро пожаловать! Я помогу найти для тебя девушку/парня, '
                                        'для начала настрой фильтры поиска', self.start_create_keyboard())
 
-        elif text == 'добавить в избранное':
+        elif text == 'добавить в избранные':
             first_last_name = self.current_pair.get("first_last_name")
             vk_link = self.current_pair.get("link")
             self.db.add_into_favorites(user_id, first_last_name, vk_link)
-            pair_id = self.db.fetch_one('SELECT id FROM pairs '
-                                        'WHERE first_last_name=%s',
-                                        (first_last_name,))[0]
+            pair_id = self.db.get_pair_id(vk_link)
             for photo_link in self.current_pair.get("photos_links"):
                 self.db.add_into_photos(pair_id, photo_link)
             self.send_message(message="Пара успешно добавлена",
                               user_id=user_id,
                               keyboard=self.create_search_keyboard())
+        elif text == 'избранные':
+            favorites = self.db.create_favorites_data(user_id)
+            for user in favorites:
+                msg = f"{user.get("first_last_name")} {user.get("link")}"
+                self.send_message(message=msg, user_id=user_id)
+                for photo_link in user.get("photos_links"):
+                    content = requests.get(photo_link).content
+                    photo_bytes = io.BytesIO(content)
+                    upload = vk_api.VkUpload(self.vk)
+                    photo = upload.photo_messages(photos=[photo_bytes])[0]
+                    owner_id = photo['owner_id']
+                    photo_id = photo['id']
+                    self.send_message(user_id=user_id,
+                                      attachment=f'photo{owner_id}_{photo_id}')
 
 
 if __name__ == '__main__':

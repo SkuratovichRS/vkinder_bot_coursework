@@ -1,4 +1,6 @@
 import configparser
+from pprint import pprint
+from typing import List, Dict, Any
 
 import psycopg2
 
@@ -56,22 +58,7 @@ class Database:
         )
         self.disconnect()
 
-    def fetch_all(self, query, params=None):
-        """
-        Выполняет SQL-запрос и возвращает все полученные строки.
-
-        Параметры
-        ----------
-        query: str
-            SQL-запрос.
-        params: tuple, optional
-            Кортеж с параметрами для запроса.
-
-        Возвращает
-        -------
-        list
-            Список кортежей с данными.
-        """
+    def fetch_all(self, query, params=None) -> list[tuple]:
         self.connect()
         if params:
             self.cursor.execute(query, params)
@@ -81,22 +68,7 @@ class Database:
         self.disconnect()
         return result
 
-    def fetch_one(self, query, params=None):
-        """
-        Выполняет SQL-запрос и возвращает первую полученную строку.
-
-        Параметры
-        ----------
-        query: str
-            SQL-запрос.
-        params: tuple, optional
-            Кортеж с параметрами для запроса.
-
-        Возвращает
-        -------
-        tuple
-            Кортеж с данными.
-        """
+    def fetch_one(self, query, params=None) -> list[tuple]:
         self.connect()
         if params:
             self.cursor.execute(query, params)
@@ -106,23 +78,32 @@ class Database:
         self.disconnect()
         return result
 
-    def execute_query(self, query, params=None):
+    def execute_query(self, query, params=None) -> None:
         self.connect()
         if params:
             self.cursor.execute(query, params)
         else:
             self.cursor.execute(query)
-        self.connection.commit()
         self.disconnect()
 
-    def add_into_favorites(self, user_id, first_last_name, vk_link):
+    @staticmethod
+    def generator(data):
+        for item in data:
+            yield item
+
+    def add_into_favorites(self, user_id: int, first_last_name: str,
+                           vk_link: str) -> None:
         self.connect()
         self.cursor.execute(
             """
             INSERT INTO pairs (user_vk_id, first_last_name, vk_link)
             VALUES (%s, %s, %s);
-            """, (user_id, first_last_name, vk_link, ))
+            """, (user_id, first_last_name, vk_link,))
         self.disconnect()
+
+    def get_pair_id(self, vk_link: str):
+        return self.fetch_one('SELECT id FROM pairs WHERE vk_link = %s',
+                              (vk_link,))[0]
 
     def add_into_photos(self, pair_id, photo_link):
         self.connect()
@@ -130,14 +111,42 @@ class Database:
             """
             INSERT INTO photos (pair_id, photo_link)
             VALUES (%s, %s);
-            """, (pair_id, photo_link, ))
+            """, (pair_id, photo_link,))
         self.disconnect()
+
+    def get_favorites(self, user_id: int) -> list[tuple]:
+        return self.fetch_all(
+            """
+            SELECT first_last_name, vk_link, photo_link FROM pairs 
+            JOIN photos ON pairs.id = photos.pair_id
+            WHERE user_vk_id = %s;
+            """, (user_id,)
+        )
+
+    def create_favorites_data(self, user_id: int) -> list[dict[str, list[Any] | Any]]:
+        data = []
+        count = 0
+        ind = 0
+        fetched = self.get_favorites(user_id)
+        for item in self.generator(fetched):
+            if count == 0:
+                data.append({"first_last_name": item[0],
+                             "link": item[1],
+                             "photos_links": [item[2]]})
+                count += 1
+            else:
+                data[ind].get("photos_links").append(item[2])
+                count += 1
+            if count == 3:
+                count = 0
+                ind += 1
+        return data
 
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read("settings.ini")
-    db = Database(config['DATABASE']['name'], config['DATABASE']['user'],
-                  config['DATABASE']['password'], '127.0.0.1', 5432)
-    print(db.fetch_all('SELECT city, sex, age, user_id FROM users '))
-    print(db.fetch_one('SELECT city FROM users')[0])
+    db = Database(config['DATABASE']['NAME'], config['DATABASE']['USER'],
+                  config['DATABASE']['PASSWORD'], config['DATABASE']['HOST'],
+                  config['DATABASE']['PORT'])
+    pprint(db.create_favorites_data(849640001))
