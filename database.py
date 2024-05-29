@@ -1,8 +1,5 @@
-import configparser
-from pprint import pprint
-from typing import List, Dict, Any
-
 import psycopg2
+from typing import Any
 
 
 class Database:
@@ -58,7 +55,7 @@ class Database:
         )
         self.disconnect()
 
-    def fetch_all(self, query, params=None) -> list[tuple]:
+    def fetch_all(self, query: Any, params=None) -> list[tuple]:
         self.connect()
         if params:
             self.cursor.execute(query, params)
@@ -68,7 +65,7 @@ class Database:
         self.disconnect()
         return result
 
-    def fetch_one(self, query, params=None) -> list[tuple]:
+    def fetch_one(self, query: Any, params=None) -> list[tuple]:
         self.connect()
         if params:
             self.cursor.execute(query, params)
@@ -78,7 +75,7 @@ class Database:
         self.disconnect()
         return result
 
-    def execute_query(self, query, params=None) -> None:
+    def execute_query(self, query: Any, params=None) -> None:
         self.connect()
         if params:
             self.cursor.execute(query, params)
@@ -87,7 +84,7 @@ class Database:
         self.disconnect()
 
     @staticmethod
-    def generator(data):
+    def generator(data: Any) -> Any:
         for item in data:
             yield item
 
@@ -105,7 +102,7 @@ class Database:
         return self.fetch_one('SELECT id FROM pairs WHERE vk_link = %s',
                               (vk_link,))[0]
 
-    def add_into_photos(self, pair_id, photo_link):
+    def add_into_photos(self, pair_id: int, photo_link: str) -> None:
         self.connect()
         self.cursor.execute(
             """
@@ -139,13 +136,5 @@ class Database:
             if count == 3:
                 count = 0
                 ind += 1
+
         return data
-
-
-if __name__ == '__main__':
-    config = configparser.ConfigParser()
-    config.read("settings.ini")
-    db = Database(config['DATABASE']['NAME'], config['DATABASE']['USER'],
-                  config['DATABASE']['PASSWORD'], config['DATABASE']['HOST'],
-                  config['DATABASE']['PORT'])
-    pprint(db.create_favorites_data(849640001))

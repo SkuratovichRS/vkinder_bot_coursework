@@ -1,7 +1,4 @@
-from pprint import pprint
-
 import requests
-import configparser
 import random
 from typing import Any
 from collections import deque
@@ -28,7 +25,6 @@ class VkApi:
         return result
 
     def has_three_photo(self, user_id: int) -> bool:
-
         url = f"{self.base_url}photos.get"
         self.base_params.update(
             {
@@ -49,7 +45,7 @@ class VkApi:
 
     def find_pairs(self, city: str, sex: int, age_from: int,
                    age_to: int, count: int = 5) -> (
-            list)[dict[str, str | list[Any] | Any]]:
+            list[dict[str, str | list[Any] | Any]]):
 
         url = f"{self.base_url}users.search"
         self.base_params.update(
@@ -61,8 +57,6 @@ class VkApi:
                 "age_to": age_to,
                 "has_photo": 1,
                 "is_closed": 0,
-                # "offset": random.randint(0, 1000 - count)
-                # "offset": 100
             }
         )
         response = requests.get(url=url, params=self.base_params)
@@ -89,7 +83,6 @@ class VkApi:
         return data
 
     def get_photos_links(self, user_id: int) -> list[Any]:
-
         url = f"{self.base_url}photos.get"
         self.base_params.update({"owner_id": user_id,
                                  "album_id": "profile",
@@ -111,12 +104,9 @@ class VkApi:
         return links
 
     def store_pairs_data(self, city: str, sex: int, age_from: int,
-                         age_to: int, count: int = 5) -> (
-            list[dict[str, str | list[Any] | None | Any]] | str):
+                         age_to: int, count: int = 5) -> None:
 
         raw_data = self.find_pairs(city, sex, age_from, age_to, count)
-        if not raw_data:
-            return "По заданным параметрам никого не найдено"
         for user in raw_data:
             user_id = user.get("id")
             photos_links = self.get_photos_links(user_id)
@@ -128,14 +118,5 @@ class VkApi:
                 }
             )
 
-    def get_pair_from_storage(self):
+    def get_pair_from_storage(self) -> dict[str, str | list[Any]]:
         return self.users_storage.popleft()
-
-
-if __name__ == '__main__':
-    config = configparser.ConfigParser()
-    config.read("settings.ini")
-    api = VkApi(config['API']['TOKEN'])
-    api.store_pairs_data("Москва", 1, 20, 30)
-    pprint(api.users_storage)
-

@@ -9,7 +9,7 @@ from database import Database
 from typing import Any
 
 
-class VKBot:
+class VkBot:
     config = configparser.ConfigParser()
     config.read("settings.ini")
 
@@ -198,10 +198,3 @@ class VKBot:
                     photo_id = photo['id']
                     self.send_message(user_id=user_id,
                                       attachment=f'photo{owner_id}_{photo_id}')
-
-
-if __name__ == '__main__':
-    bot = VKBot()
-    print('Бот запущен')
-    while True:
-        bot.run()
