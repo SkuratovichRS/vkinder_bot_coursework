@@ -127,8 +127,7 @@ class Database:
         data = []
         count = 0
         ind = 0
-        fetched = self.get_favorites(user_id)
-        for item in self.generator(fetched):
+        for item in self.generator(self.get_favorites(user_id)):
             if count == 0:
                 data.append({"first_last_name": item[0],
                              "link": item[1],
