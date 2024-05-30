@@ -91,6 +91,28 @@ class Database:
         for item in data:
             yield item
 
+    def authentication(self, user_id: int):
+        return self.fetch_one("SELECT user_id FROM users WHERE user_id = %s",
+                              (user_id,))
+
+    def get_settings_for_search(self, user_id: int):
+        self.connect()
+        self.cursor.execute(
+            "SELECT city, sex, age, user_id FROM users WHERE user_id= %s",
+            (user_id,))
+
+    def insert_settings_for_search(self, user_id: int, city: str, selected_gender: str, age: int):
+        self.connect()
+        self.cursor.execute("INSERT INTO users (user_id, city, sex, age) VALUES (%s, %s, %s, %s)",
+                            (user_id, city, selected_gender, age,))
+        self.disconnect()
+
+    def update_settings_for_search(self, city: str, selected_gender: str, age: int, user_id: int):
+        self.connect()
+        self.cursor.execute(f"""UPDATE users 
+                                SET city = '{city}', sex = '{selected_gender}', age = {age}
+                                WHERE user_id = {user_id}""")
+
     def add_into_favorites(self, user_id: int, first_last_name: str,
                            vk_link: str) -> None:
         self.connect()
@@ -102,7 +124,7 @@ class Database:
         self.disconnect()
 
     def get_pair_id(self, vk_link: str):
-        return self.fetch_one('SELECT id FROM pairs WHERE vk_link = %s',
+        return self.fetch_one("SELECT id FROM pairs WHERE vk_link = %s",
                               (vk_link,))[0]
 
     def add_into_photos(self, pair_id, photo_link):
@@ -142,10 +164,10 @@ class Database:
         return data
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read("settings.ini")
-    db = Database(config['DATABASE']['NAME'], config['DATABASE']['USER'],
-                  config['DATABASE']['PASSWORD'], config['DATABASE']['HOST'],
-                  config['DATABASE']['PORT'])
+    db = Database(config["DATABASE"]["NAME"], config["DATABASE"]["USER"],
+                  config["DATABASE"]["PASSWORD"], config["DATABASE"]["HOST"],
+                  config["DATABASE"]["PORT"])
     pprint(db.create_favorites_data(849640001))

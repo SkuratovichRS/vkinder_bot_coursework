@@ -10,8 +10,8 @@ from collections import deque
 class VkApi:
     def __init__(self, token):
         self.token = token
-        self.base_url = 'https://api.vk.com/method/'
-        self.base_params = {'access_token': token, 'v': '5.131'}
+        self.base_url = "https://api.vk.com/method/"
+        self.base_params = {"access_token": token, "v": "5.131"}
         self.users_storage = deque()
 
     def get_random_pairs(self, data: list, count: int) -> list[Any]:
@@ -68,8 +68,8 @@ class VkApi:
         response = requests.get(url=url, params=self.base_params)
         print(f"{self.find_pairs.__name__}-{response.status_code=}")
         response_json = response.json()
-        if list(response_json.keys())[0] == 'error':
-            raise Exception([response_json['error']['error_msg']])
+        if list(response_json.keys())[0] == "error":
+            raise Exception([response_json["error"]["error_msg"]])
         try:
             response_json.get("response").get("items")
         except Exception as e:
@@ -78,12 +78,9 @@ class VkApi:
         random_users = (self.get_random_pairs
                         (response_json.get("response").get("items"), count))
         data = [
-            {
-                "id": user.get("id"),
-                "link": f"https://vk.com/id{user.get("id")}",
-                "first_last_name": f"{user.get("first_name")} "
-                                   f"{user.get("last_name")}"
-            }
+            dict(id=user.get("id"), link=f"https://vk.com/id{user.get('id')}",
+                 first_last_name=f"{user.get('first_name')} "
+                                 f"{user.get('last_name')}")
             for user in random_users]
 
         return data
@@ -132,10 +129,10 @@ class VkApi:
         return self.users_storage.popleft()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read("settings.ini")
-    api = VkApi(config['API']['TOKEN'])
+    api = VkApi(config["API"]["TOKEN"])
     api.store_pairs_data("Москва", 1, 20, 30)
     pprint(api.users_storage)
 
