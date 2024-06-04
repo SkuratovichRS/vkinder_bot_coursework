@@ -1,7 +1,4 @@
-import configparser
-from pprint import pprint
-from typing import List, Dict, Any
-
+from typing import Any
 import psycopg2
 
 
@@ -68,7 +65,7 @@ class Database:
         self.disconnect()
         return result
 
-    def fetch_one(self, query, params=None) -> list[tuple]:
+    def fetch_one(self, query, params=None) -> tuple:
         self.connect()
         if params:
             self.cursor.execute(query, params)
@@ -91,27 +88,31 @@ class Database:
         for item in data:
             yield item
 
-    def authentication(self, user_id: int):
+    def authentication(self, user_id: int) -> tuple:
         return self.fetch_one("SELECT user_id FROM users WHERE user_id = %s",
                               (user_id,))
 
-    def get_settings_for_search(self, user_id: int):
+    def get_settings_for_search(self, user_id: int) -> list[tuple]:
         self.connect()
-        self.cursor.execute(
+        return self.fetch_all(
             "SELECT city, sex, age, user_id FROM users WHERE user_id= %s",
             (user_id,))
 
-    def insert_settings_for_search(self, user_id: int, city: str, selected_gender: str, age: int):
+    def insert_settings_for_search(self, user_id: int, city: str,
+                                   selected_gender: str, age: int) -> None:
         self.connect()
         self.cursor.execute("INSERT INTO users (user_id, city, sex, age) VALUES (%s, %s, %s, %s)",
                             (user_id, city, selected_gender, age,))
         self.disconnect()
 
-    def update_settings_for_search(self, city: str, selected_gender: str, age: int, user_id: int):
+    def update_settings_for_search(self, city: str, selected_gender: str,
+                                   age: int, user_id: int) -> None:
         self.connect()
-        self.cursor.execute(f"""UPDATE users 
-                                SET city = '{city}', sex = '{selected_gender}', age = {age}
-                                WHERE user_id = {user_id}""")
+        self.cursor.execute("""UPDATE users 
+                                SET city = %s, sex = %s, age = %s
+                                WHERE user_id = %s""",
+                            (city, selected_gender, age, user_id))
+        self.disconnect()
 
     def add_into_favorites(self, user_id: int, first_last_name: str,
                            vk_link: str) -> None:
@@ -127,7 +128,7 @@ class Database:
         return self.fetch_one("SELECT id FROM pairs WHERE vk_link = %s",
                               (vk_link,))[0]
 
-    def add_into_photos(self, pair_id, photo_link):
+    def add_into_photos(self, pair_id: int, photo_link: str) -> None:
         self.connect()
         self.cursor.execute(
             """
@@ -162,12 +163,3 @@ class Database:
                 count = 0
                 ind += 1
         return data
-
-
-if __name__ == "__main__":
-    config = configparser.ConfigParser()
-    config.read("settings.ini")
-    db = Database(config["DATABASE"]["NAME"], config["DATABASE"]["USER"],
-                  config["DATABASE"]["PASSWORD"], config["DATABASE"]["HOST"],
-                  config["DATABASE"]["PORT"])
-    pprint(db.create_favorites_data(849640001))

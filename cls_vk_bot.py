@@ -69,13 +69,10 @@ class VKBot:
                             color=VkKeyboardColor.POSITIVE)
         keyboard.add_button("Избранные",
                             color=VkKeyboardColor.POSITIVE)
+        keyboard.add_line()
+        keyboard.add_button("Настроить фильтры поиска",
+                            color=VkKeyboardColor.PRIMARY)
         return keyboard.get_keyboard()
-
-    # @staticmethod
-    # def create_add_favorites_inline_keyboard():
-    #     keyboard = VkKeyboard(inline=True)
-    #     keyboard.add_button("Добавить в избранное", color=VkKeyboardColor.POSITIVE)
-    #     return keyboard.get_keyboard()
 
     def handle_gender_selection(self, selected_gender: str, user_id: int, city: str, age: int):
         keyboard = self.start_create_keyboard()
@@ -84,10 +81,13 @@ class VKBot:
 
         if result_user_id:
             self.db.update_settings_for_search(city, selected_gender, age, user_id)
+            print("updated")
         else:
             self.db.insert_settings_for_search(user_id, city, selected_gender, age)
+            print("inserted")
 
-        self.send_message(user_id, "Теперь фильтры настроены, далее нажмите кнопку поиск", keyboard)
+        self.send_message(user_id,
+                          "Теперь фильтры настроены, далее нажмите кнопку поиск", keyboard)
 
     def buttons_filter_male_or_female(self, user_id: int, city: str, age: int):
         keyboard = self.create_keyboard_gender()
@@ -158,6 +158,8 @@ class VKBot:
                 photo_id = photo["id"]
                 self.send_message(user_id=user_id,
                                   attachment=f"photo{owner_id}_{photo_id}")
+        self.send_message(message="Вы посмотрели все избранные пары",
+                          user_id=user_id, keyboard=self.start_create_keyboard())
 
     def run(self):
         text, user_id = self.interface()
@@ -166,14 +168,6 @@ class VKBot:
             self.filter_city(user_id)
 
         elif text == "поиск":
-            # на этом участке предположительно нужно нужно сделать так, чтобы убраит лишнее (лучше через try/except)
-            # query = db.fetch_all('SELECT city, sex, age, user_id FROM users WHERE user_id= %s', (user_id,))
-            # if query:
-            #       for city, sex, age, user_id in query:
-            #           self.search(str(city), int(age), str(sex), 3, user_id)
-            #   else:
-            #           self.send_message(user_id, 'Вы еще не настроили фильтры для поиска')
-
             result_user_id = self.db.authentication(user_id)
 
             if result_user_id:
@@ -181,7 +175,8 @@ class VKBot:
                 city, sex, age, user_id = query[0]
                 self.search(str(city), int(age), str(sex), user_id)
             else:
-                self.send_message(user_id, "Вы еще не настроили фильтры для поиска")
+                self.send_message(user_id, "Вы еще не настроили фильтры для поиска",
+                                  keyboard=self.start_create_keyboard())
 
         elif text == "дальше":
             if self.api.users_storage:
@@ -191,18 +186,13 @@ class VKBot:
                 self.send_message(user_id, msg, keyboard=self.create_search_keyboard())
 
         elif text == "старт":
-            self.send_message(user_id, "Добро пожаловать! Я помогу найти для тебя девушку/парня, "
-                                       "для начала настрой фильтры поиска", self.start_create_keyboard())
+            self.send_message(user_id,
+                              "Добро пожаловать! Я помогу найти для тебя девушку/парня, "
+                              "для начала настрой фильтры поиска",
+                              self.start_create_keyboard())
 
         elif text == "добавить в избранные":
             self.add_favorites(user_id)
 
         elif text == "избранные":
             self.get_favorite(user_id)
-
-
-if __name__ == "__main__":
-    bot = VKBot()
-    print("Бот запущен")
-    while True:
-        bot.run()
